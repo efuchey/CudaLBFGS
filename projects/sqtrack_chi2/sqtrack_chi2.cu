@@ -28,25 +28,48 @@ public:
 	m_h_deltapx (h_deltapx),
 	m_h_deltapy (h_deltapy),
 	m_h_deltapz (h_deltapz){}
-
+	
 	void cpu_f_gradf(const floatdouble* h_x, floatdouble *h_chi2, floatdouble *h_grad)
 	{
+		float m_x0 = h_x[0];
+		float m_y0 = h_x[1];
+		float m_tx = h_x[2];
+		float m_ty = h_x[3];
+		
+		printf("x0 %1.6f, y0 %1.6f, tx %1.6f, ty %1.6f \n", m_x0, m_y0, m_tx, m_ty);
+		
 		for (size_t n = 0; n<m_numDimensions; n++)
 		{
 			h_grad[n] = 0.0;
 		}
 		*h_chi2 = 0.0;
 		for(size_t i = 0; i<m_n_points; i++){
-			const float Den = sqrtf( m_h_deltapy[i] * m_h_deltapy[i] +  m_h_deltapx[i] * m_h_deltapx[i] + 2.0f * m_h_deltapx[i] * m_h_deltapy[i] * h_x[2] * h_x[3] );
-			const float dca = ( -1.0f * m_h_deltapy[i] * ( m_h_p1x[i] - h_x[0] ) + m_h_deltapx[i] * ( m_h_p1y[i] - h_x[1] ) - m_h_p1z[i] * ( h_x[2] * m_h_deltapy[i] - h_x[3] * m_h_deltapy[i] )  ) / Den;
-			//const float value = ( h_drift[i] - dca ) / h_res[i];
+			const double Den = sqrt( (m_ty*m_h_deltapz[i] - m_h_deltapy[i])*(m_ty*m_h_deltapz[i] - m_h_deltapy[i]) +
+			(m_h_deltapx[i] - m_tx*m_h_deltapz[i])*(m_h_deltapx[i] - m_tx*m_h_deltapz[i]) +
+			(m_tx*m_h_deltapy[i] - m_ty*m_h_deltapx[i])*(m_tx*m_h_deltapy[i] - m_ty*m_h_deltapx[i]) );
+			
+			const double dca = ( (m_ty*m_h_deltapz[i] - m_h_deltapy[i]) * ( m_h_p1x[i] - m_x0 ) +
+			(m_h_deltapx[i] - m_tx*m_h_deltapz[i]) * ( m_h_p1y[i] - m_y0 ) +
+			 m_h_p1z[i] * ( m_tx * m_h_deltapy[i] - m_ty * m_h_deltapx[i] )  ) / Den;
+			
 			*h_chi2+= ( m_h_drift[i] - dca )*( m_h_drift[i] - dca ) / m_h_res[i] / m_h_res[i];
 			
-			h_grad[0]+= -2.0f * ( m_h_drift[i] - dca ) * m_h_deltapy[i] / Den / m_h_res[i] / m_h_res[i];
-			h_grad[1]+= 2.0f * ( m_h_drift[i] - dca ) * m_h_deltapx[i] / Den / m_h_res[i] / m_h_res[i];
-			h_grad[2]+= -2.0f * ( m_h_drift[i] - dca ) * ( m_h_deltapy[i] * m_h_p1z[i] / Den + dca * h_x[3] * m_h_deltapx[i] * m_h_deltapy[i] / Den / Den ) / m_h_res[i] / m_h_res[i];	
-			h_grad[3]+= -2.0f * ( m_h_drift[i] - dca ) * ( -1.0f * m_h_deltapy[i] * m_h_p1z[i] / Den + dca * h_x[2] * m_h_deltapx[i] * m_h_deltapy[i] / Den / Den ) / m_h_res[i] / m_h_res[i];	
+			h_grad[0]+= 1.e-6 * 2.0f * ( m_h_drift[i] - dca ) * (m_ty*m_h_deltapz[i] - m_h_deltapy[i]) / Den / m_h_res[i] / m_h_res[i];
+			
+			h_grad[1]+= 1.e-6 * 2.0f * ( m_h_drift[i] - dca ) * (m_h_deltapx[i] - m_tx*m_h_deltapz[i]) / Den / m_h_res[i] / m_h_res[i];
+			
+			h_grad[2]+= 1.e-6 * -2.0f * ( m_h_drift[i] - dca ) * ( (m_h_p1z[i]*m_h_deltapy[i] - m_h_deltapz[i]*(m_h_p1y[i] - m_y0))
+									- dca * ( ( m_h_deltapy[i] * m_h_deltapy[i] + m_h_deltapz[i] * m_h_deltapz[i] ) * m_tx - m_h_deltapx[i] * m_h_deltapz[i] - m_h_deltapx[i] * m_h_deltapy[i] * m_ty )/Den ) / Den / m_h_res[i] / m_h_res[i];
+			
+										
+			h_grad[3]+= 1.e-6 * -2.0f * ( m_h_drift[i] - dca ) * ( ( m_h_deltapz[i]*(m_h_p1x[i] - m_x0) - m_h_p1z[i]*m_h_deltapx[i] )
+									- dca * ( ( m_h_deltapx[i] * m_h_deltapx[i] + m_h_deltapz[i] * m_h_deltapz[i] ) * m_ty - m_h_deltapy[i] * m_h_deltapz[i] - m_h_deltapx[i] * m_h_deltapy[i] * m_tx )/Den ) / Den / m_h_res[i] / m_h_res[i];
+
+			//printf("%1.6f, %1.6f, %1.6f, %1.6f, (%1.6f - %1.6f),  (%1.6f - %1.6f) \n", dca, Den, (m_ty*m_h_deltapz[i] - m_h_deltapy[i]), (m_h_deltapx[i] - m_tx*m_h_deltapz[i]), (m_h_p1z[i]*m_h_deltapy[i] - m_h_deltapz[i]*(m_h_p1y[i] - m_y0)), dca * ( ( m_h_deltapy[i] * m_h_deltapy[i] + m_h_deltapz[i] * m_h_deltapz[i] ) * m_tx - m_h_deltapx[i] * m_h_deltapz[i] - m_h_deltapx[i] * m_h_deltapy[i] * m_ty )/Den, ( m_h_deltapz[i]*(m_h_p1x[i] - m_x0) - m_h_p1z[i]*m_h_deltapx[i] ), dca * ( ( m_h_deltapx[i] * m_h_deltapx[i] + m_h_deltapz[i] * m_h_deltapz[i] ) * m_ty - m_h_deltapy[i] * m_h_deltapz[i] - m_h_deltapx[i] * m_h_deltapy[i] * m_tx )/Den );
+			
 		}
+		
+		printf("chi2 %1.6f; dchi2/dx0 %1.6f, dchi2/dy0 %1.6f, dchi2/dtx %1.6f, dchi2/dty %1.6f \n", *h_chi2, h_grad[0], h_grad[1], h_grad[2], h_grad[3]);
 	}
 
 private:
@@ -84,24 +107,42 @@ namespace gpu_sqtrack_chi2_d
 		d_grad[1] = 0.0f;
 		d_grad[2] = 0.0f;
 		d_grad[3] = 0.0f;
+		float m_x0 = d_x[0];
+		float m_y0 = d_x[1];
+		float m_tx = d_x[2];
+		float m_ty = d_x[3];
 		//printf("%d %1.6f %1.6f %1.6f %1.6f \n", n_points, d_x[0], d_x[1], d_x[2], d_x[3]);
 		for(size_t i = 0; i<6; i++){
-			printf("%1.6f %1.6f %1.6f %1.6f %1.6f %1.6f %1.6f %1.6f \n", d_drift[i], d_res[i], d_p1x[i], d_p1y[i], d_p1z[i], d_deltapx[i], d_deltapy[i], d_deltapz[i]);
-			const float Den = sqrtf( d_deltapy[i] * d_deltapy[i] * (1.0f+d_x[2]*d_x[2]) + d_deltapx[i] * d_deltapx[i] * (1.0f+d_x[3]*d_x[3]) - 2.0f * d_deltapx[i] * d_deltapy[i] * d_x[2] * d_x[3] );
-			const float dca = (-d_deltapy[i]*(d_p1x[i] - d_x[0]) + d_deltapx[i]*(d_p1y[i] - d_x[1]) + d_p1z[i]*(d_x[2]*d_deltapy[i] - d_x[3]*d_deltapx[i]) ) / Den;
+			//printf("%1.6f %1.6f %1.6f %1.6f %1.6f %1.6f %1.6f %1.6f \n", d_drift[i], d_res[i], d_p1x[i], d_p1y[i], d_p1z[i], d_deltapx[i], d_deltapy[i], d_deltapz[i]);
+			const float Den = sqrt( (m_ty*d_deltapz[i] - d_deltapy[i])*(m_ty*d_deltapz[i] - d_deltapy[i]) +
+					(d_deltapx[i] - m_tx*d_deltapz[i])*(d_deltapx[i] - m_tx*d_deltapz[i]) +
+					(m_tx*d_deltapy[i] - m_ty*d_deltapx[i])*(m_tx*d_deltapy[i] - m_ty*d_deltapx[i]) );
+			
+			const float dca = ( (m_ty*d_deltapz[i] - d_deltapy[i]) * ( d_p1x[i] - m_x0 ) +
+					(d_deltapx[i] - m_tx*d_deltapz[i]) * ( d_p1y[i] - m_y0 ) +
+					d_p1z[i] * ( m_tx * d_deltapy[i] - m_ty * d_deltapx[i] )  ) / Den;
+			//const float Den = sqrtf( d_deltapy[i] * d_deltapy[i] * (1.0f+d_x[2]*d_x[2]) + d_deltapx[i] * d_deltapx[i] * (1.0f+d_x[3]*d_x[3]) - 2.0f * d_deltapx[i] * d_deltapy[i] * d_x[2] * d_x[3] );
+			//const float dca = (-d_deltapy[i]*(d_p1x[i] - d_x[0]) + d_deltapx[i]*(d_p1y[i] - d_x[1]) + d_p1z[i]*(d_x[2]*d_deltapy[i] - d_x[3]*d_deltapx[i]) ) / Den;
 			
 			//const float value = ( d_drift[i] - dca ) / d_res[i];
 			d_chi2+= ( d_drift[i] - dca )*( d_drift[i] - dca ) / d_res[i] / d_res[i];
-			printf("den = %1.6f dca = %1.6f chi2+ = %1.6f\n", Den, dca, ( d_drift[i] - dca )*( d_drift[i] - dca ) / d_res[i] / d_res[i]);
-
-			d_grad[0]+= +2.0f * ( d_drift[i] - dca ) * d_deltapy[i] / Den / d_res[i] / d_res[i];
-			d_grad[1]+= -2.0f * ( d_drift[i] - dca ) * d_deltapx[i] / Den / d_res[i] / d_res[i];
-			d_grad[2]+= -2.0f * ( d_drift[i] - dca ) * ( -1.0f * d_deltapy[i] * d_p1z[i] / Den + dca * d_x[3] * d_deltapx[i] * d_deltapy[i] / Den / Den ) / d_res[i] / d_res[i];	
-			d_grad[3]+= -2.0f * ( d_drift[i] - dca ) * ( d_deltapx[i] * d_p1z[i] / Den + dca * d_x[2] * d_deltapx[i] * d_deltapy[i] / Den / Den ) / d_res[i] / d_res[i];	
+			//printf("den = %1.6f dca = %1.6f chi2+ = %1.6f\n", Den, dca, ( d_drift[i] - dca )*( d_drift[i] - dca ) / d_res[i] / d_res[i]);
+			
+			d_grad[0]+= 2.0f * ( d_drift[i] - dca ) * (m_ty*d_deltapz[i] - d_deltapy[i]) / Den / d_res[i] / d_res[i];
+			
+			d_grad[1]+= 2.0f * ( d_drift[i] - dca ) * (d_deltapx[i] - m_tx*d_deltapz[i]) / Den / d_res[i] / d_res[i];
+			
+			d_grad[2]+= -2.0f * ( d_drift[i] - dca ) * ( (d_p1z[i]*d_deltapy[i] - d_deltapz[i]*(d_p1y[i] - m_y0))
+									- dca * ( ( d_deltapy[i] * d_deltapy[i] + d_deltapz[i] * d_deltapz[i] ) * m_tx - d_deltapx[i] * d_deltapz[i] - d_deltapx[i] * d_deltapy[i] * m_ty )/Den ) / Den / d_res[i] / d_res[i];
+			
+			d_grad[3]+= -2.0f * ( d_drift[i] - dca ) * ( ( d_deltapz[i]*(d_p1x[i] - m_x0) - d_p1z[i]*d_deltapx[i] )
+									- dca * ( ( d_deltapx[i] * d_deltapx[i] + d_deltapz[i] * d_deltapz[i] ) * m_ty - d_deltapy[i] * d_deltapz[i] - d_deltapx[i] * d_deltapy[i] * m_tx )/Den ) / Den / d_res[i] / d_res[i];
+			
+			
 		}
 		
-		printf("chi2 = %1.6f\n", d_chi2);
-		d_chi2 = d_chi2/0.;
+		//printf("chi2 = %1.6f\n", d_chi2);
+		//d_chi2 = d_chi2/0.;
 	}
 }
 
@@ -174,52 +215,67 @@ int main(int argc, char **argv)
 {
 
 	size_t maxIter = 500;
-	float gradientEps = 1e-6f;
+	float gradientEps = 1e-12f;
 
-	int n_points = 6;
+	size_t n_points = 6;
 	
-	//float drift[6] = {0.000000,0.000000,0.000000,0.000000,0.000000,0.000000};
-	//float res[6] = {0.601311,0.601311,0.583413,0.583413,0.583413,0.583413};
-	//float p1x[6] = {97.094971,96.025970,118.072472,117.044777,76.127060,75.085052};
-	//float p1y[6] = {-131.875977,-131.860977,-132.290207, -132.307205,-132.994751,-132.992752};
-	//float p1z[6] = {1346.886841,1339.906860,1372.907227,1365.917236,1321.749268,1314.779175};
-	//float deltapx[6] = {-0.711784,-0.711784,-66.804100,-66.804100,66.165398,66.165398};
-	//float deltapy[6] = {261.799988,261.799988,261.772003,261.772003,261.934998,261.934998};
-	//float deltapz[6] = {0.673091,0.673091,-0.574838,-0.574838,-0.045143,-0.045143};
 	float drift[6] = {0.000000,0.000000,0.000000,0.000000,0.000000,0.000000};
-	float res[6] = {0.601311,0.601311,0.583413,0.583413,0.583413,0.583413};
-	float p1x[6] = {-107.038040,-106.024055,-63.163315,-62.107838,-148.856369,-147.815201};
-	float p1y[6] = {-132.431320,-132.410660,-133.177597,-133.184402,-132.442978,-132.446091};
-	float p1z[6] = {1347.024414,1340.042969,1372.482910,1365.497803,1322.266968,1315.291992};
-	//-0.711784,-0.711784,-66.804100,-66.804100,66.165398,66.165398};
-	//float deltapy[6] = {261.799988,261.799988,261.772003,261.772003,261.934998,261.934998};
-	//float deltapz[6] = {0.673091,0.673091,-0.574838,-0.574838,-0.045143,-0.045143};
-	float deltapx[6] = {-0.7182,-0.7182,-67.33,-67.33,66.686,66.686};
-	float deltapy[6] = {264.16, 264.16, 263.83, 263.83, 264.0, 264.0};
-	float deltapz[6] = {0.67915, 0.67915, -0.57936, -0.57936, -0.045499,-0.045499};
-	
-	gpu_sqtrack_chi2 p1(n_points, drift, res, p1x, p1y, p1z, deltapx, deltapy, deltapz);
+	float res[6] = {0.583412447, 0.583412447, 0.6013103054, 0.6013103054, 0.583412447, 0.583412447};
+	float p1x[6] = {-147.8155163, -148.8560617, -106.0241719, -107.0382169, -62.10788208, -63.16341238};
+	float p1y[6] = {-132.4463745, -132.4429597, -132.4103432, -132.4310822, -133.184595, -133.1777203};
+	float p1z[6] = {1315.288245, 1322.270643, 1340.04129, 1347.021991, 1365.497459, 1372.485019};
+	float deltapx[6] = {66.6864102, 66.68640862, -0.7181965721, -0.7181965721, -67.33012658, -67.33012658};
+	float deltapy[6] = {263.9972253, 263.9972257, 264.1581506, 264.1581506, 263.8331532, 263.8331532};
+	float deltapz[6] = {-0.04549869907, -0.04549869907, 0.6791544575, 0.6791544575, -0.5793643679, -0.5793643679};
 
+		
+	//gpu_sqtrack_chi2 p1(n_points, drift, res, p1x, p1y, p1z, deltapx, deltapy, deltapz);
+	cpu_sqtrack_chi2 p1(n_points, drift, res, p1x, p1y, p1z, deltapx, deltapy, deltapz);
+
+/*
+	floatdouble x[4] = {0.01f, 0.01f, 0.001f, 0.001f};
+	
+	floatdouble chi2_0 = 0.0f;
+	floatdouble gradf_0[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+
+	p1.cpu_f_gradf(x, &chi2_0, gradf_0);
+	
+	floatdouble gradf[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+	
+	floatdouble dx[4] = {0.001f, 0.1f, 0.0001f, 0.0001f};
+	
+	for(int i = 0; i<4; i++){
+		floatdouble dchi2 = 0;
+		x[i]+= dx[i];
+		p1.cpu_f_gradf(x, &dchi2, gradf);
+		printf("%d %1.6f %1.6f %1.6f %1.6f\n", i, (dchi2-chi2_0)/dx[i], gradf_0[i], (dchi2-chi2_0)/dx[i]/gradf_0[i], gradf[i]);
+		x[i]-= dx[i];
+	}
+*/
 	lbfgs minimizer(p1);
 	minimizer.setMaxIterations(maxIter);
 	minimizer.setGradientEpsilon(gradientEps);
 	
-	//float x[4] = {0, 0.0, 0.0, 0.0};
-	float x[4] = {94.919998, -50.00, -0.14992, 0.074924};
+	float x[4] = {0.0, 0.0, 0.0, 0.0};
+	//float x[4] = {75.0, -25.0, -0.1, 0.05};
+	//float x[4] = {94.919998, -50.00, -0.14992, 0.074924};
 
+	lbfgs::status stat = minimizer.minimize_with_host_x(x);
+
+/*
 	float *d_x;
 	CudaSafeCall( cudaMalloc(&d_x,   4 * sizeof(float)) );
 	CudaSafeCall( cudaMemcpy(d_x, x, 4 * sizeof(float), cudaMemcpyHostToDevice) );
 	
-	lbfgs::status stat2 = minimizer.minimize(d_x);
 	
-	cout << lbfgs::statusToString(stat2).c_str() << endl;
+	//lbfgs::status stat = minimizer.minimize(d_x);
+	
+	cout << lbfgs::statusToString(stat).c_str() << endl;
 
 	CudaSafeCall( cudaMemcpy(x, d_x, 4 * sizeof(float), cudaMemcpyDeviceToHost) );
 	CudaSafeCall( cudaFree(d_x) );
-
+*/
 	cout << x[0] << " " << x[1] << " " << x[2] << " " << x[3] << endl;
-
 	
 	return 0;
 }
